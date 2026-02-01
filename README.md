@@ -42,4 +42,5 @@ Este repositório contém os principais artefatos do projeto desenvolvido para I
 ## Como usar
 1. Clone este repositório:
    ```bash
-   git clone https://github.com/seu-usuario/iot-aws-projeto.git
+
+   git clone https://github.com/tlima49/iot-aws-tcc.git
