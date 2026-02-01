@@ -1,0 +1,145 @@
+{
+    "Table": {
+        // ===== INFORMAÇÕES BÁSICAS DA TABELA =====
+        "Name": "sensor_data",                           		// Nome da tabela no catálogo
+        "DatabaseName": "biorreator_db",                		// Database do projeto biorreator
+        "Owner": "hadoop",                               	// Proprietário padrão (serviço Glue)
+        "CreateTime": "2025-08-26T13:57:09-03:00",      	// Data de criação inicial
+        "UpdateTime": "2025-09-02T10:51:06-03:00",      	// Última modificação da estrutura
+        "LastAccessTime": "1969-12-31T21:00:00-03:00",  // Não rastreado (valor Unix epoch)
+        "Retention": 0,                                  		// Sem retenção automática configurada
+        
+        // ===== CONFIGURAÇÕES DE ARMAZENAMENTO =====
+        "StorageDescriptor": {
+            // ----- SCHEMA DAS COLUNAS DE DADOS -----
+            "Columns": [
+                {
+                    "Name": "ph",           // Valor do pH do biorreator (sensor crítico)
+                    "Type": "double"        // Float
+                },
+                {
+                    "Name": "rpm",          // Rotações por minuto do agitador
+                    "Type": "int"           // Inteiro
+                },
+                {
+                    "Name": "tcd",          // Total Cell Density - densidade celular
+                    "Type": "double"        // Float
+                },
+                {
+                    "Name": "temperatura",  // Temperatura do biorreator em Celsius
+                    "Type": "double"        // Float
+                },
+                {
+                    "Name": "timestamp",    // Timestamp da coleta no formato ISO
+                    "Type": "string"        // String: "YYYY-MM-DD HH:MM:SS"
+                },
+                {
+                    "Name": "equipment",    // ID único do equipamento (extraído do tópico MQTT)
+                    "Type": "string"        // String: formato "25080001", "25080002", etc.
+                }
+            ],
+            
+            // ----- CONFIGURAÇÕES S3 E FORMATO -----
+            // Localização base no S3
+            "Location": "s3://biorreator-data-tcc/data",
+            // Formato de leitura Parquet
+            "InputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
+            // Formato de escrita Parquet
+            "OutputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
+            // Compressão gerenciada pelo SerDe (Snappy automático)
+            "Compressed": false,
+            // Sem bucketing configurado
+            "NumberOfBuckets": -1,
+            
+            // ----- CONFIGURAÇÕES SERDE (SERIALIZATION/DESERIALIZATION) -----
+            "SerdeInfo": {
+                "SerializationLibrary": "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe", // SerDe nativo do Parquet
+                "Parameters": {
+                    "serialization.format": "1"         // Formato padrão de serialização
+                }
+            },
+            
+            // ----- CONFIGURAÇÕES AVANÇADAS (NÃO UTILIZADAS) -----
+            "BucketColumns": [],                         // Sem particionamento por hash
+            "SortColumns": [],                           // Sem ordenação específica nos arquivos
+            "Parameters": {},                            // Parâmetros adicionais do storage
+            "SkewedInfo": {                             // Configurações para dados enviesados
+                "SkewedColumnNames": [],                 // Sem colunas com distribuição irregular
+                "SkewedColumnValues": [],
+                "SkewedColumnValueLocationMaps": {}
+            },
+            "StoredAsSubDirectories": false              // Estrutura flat dentro de cada partição
+        },
+        
+        // ===== CHAVES DE PARTICIONAMENTO =====
+        // Estrutura: s3://bucket/data/YYYY/MM/DD/HH/arquivo.parquet
+        "PartitionKeys": [
+            {
+                "Name": "year",         // Ano da coleta (2024, 2025, 2026)
+                "Type": "string"        // String para compatibilidade com projection
+            },
+            {
+                "Name": "month",        // Mês da coleta (01-12, com zero à esquerda)
+                "Type": "string"
+            },
+            {
+                "Name": "day",          // Dia da coleta (01-31, com zero à esquerda)
+                "Type": "string"
+            },
+            {
+                "Name": "hour",         // Hora da coleta (00-23, com zero à esquerda)
+                "Type": "string"
+            }
+        ],
+        
+        // ===== TIPO E METADADOS DA TABELA =====
+        "TableType": "EXTERNAL_TABLE",                   // Tabela externa
+        
+        // ===== PARÂMETROS DE CONFIGURAÇÃO =====
+        "Parameters": {
+            // ----- CONFIGURAÇÕES PARTITION PROJECTION -----
+            // Permite ao Athena criar partições automaticamente sem MSCK REPAIR
+            "projection.enabled": "true",                // Habilita partition projection
+            
+            // *** CONFIGURAÇÕES DO ANO ***
+            "projection.year.type": "integer",           // Tipo: números inteiros
+            "projection.year.range": "2024,2026",       // Range: 2024 até 2026
+            "projection.year.digits": "4",               // Formato: 4 dígitos (2025)
+            
+            // *** CONFIGURAÇÕES DO MÊS ***
+            "projection.month.type": "integer",          // Tipo: números inteiros
+            "projection.month.range": "1,12",            // Range: 1 até 12
+            "projection.month.digits": "2",              // Formato: 2 dígitos
+            "projection.month.format": "%02d",           // Zero à esquerda: 01, 02, ..., 12
+            
+            // *** CONFIGURAÇÕES DO DIA ***
+            "projection.day.type": "integer",            // Tipo: números inteiros
+            "projection.day.range": "1,31",              // Range: 1 até 31
+            "projection.day.digits": "2",                // Formato: 2 dígitos
+            "projection.day.format": "%02d",             // Zero à esquerda: 01, 02, ..., 31
+            
+            // *** CONFIGURAÇÕES DA HORA ***
+            "projection.hour.type": "integer",           // Tipo: números inteiros
+            "projection.hour.range": "0,23",             // Range: 0 até 23 horas
+            "projection.hour.digits": "2",               // Formato: 2 dígitos
+            "projection.hour.format": "%02d",            // Zero à esquerda: 00, 01, ..., 23
+            
+            // *** TEMPLATE DE LOCALIZAÇÃO S3 ***
+            // Define como as partições são organizadas no S3
+            "storage.location.template": "s3://biorreator-data-tcc/data/${year}/${month}/${day}/${hour}/",
+            
+            // ----- METADADOS DE SISTEMA -----
+            "last_modified_time": "1756821065",          // Unix timestamp da última modificação
+            "transient_lastDdlTime": "1756821065",       // Timestamp DDL (Data Definition Language)
+            "last_modified_by": "hadoop",                // Usuário que fez a última modificação
+            "EXTERNAL": "TRUE"                           // Marcador de tabela externa
+        },
+        
+        // ===== INFORMAÇÕES DE AUDITORIA =====
+        "CreatedBy": "arn:aws:iam::xxx:user/tiago",     // ARN do usuário criador
+        "IsRegisteredWithLakeFormation": false,         // Não usa Lake Formation para controle de acesso
+        "CatalogId": "xxx",                             // ID da conta AWS (mascarado)
+        "VersionId": "1",                               // Versão da definição da tabela
+        "IsMultiDialectView": false                     // Não é uma view multi-dialeto
+    }
+}
